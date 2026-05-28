@@ -49,3 +49,10 @@ for code, name, country, region in plants:
 print("\n✅ Seed complete.")
 print("  Login: analyst / demo1234")
 print("  Login: admin   / demo1234")
+
+# Create Django superuser for /admin access
+if not User.objects.filter(is_superuser=True).exists():
+    su = User.objects.create_superuser('superadmin', 'admin@breatheesg.com', 'admin1234')
+    print("Superuser created: superadmin / admin1234")
+else:
+    print("Superuser already exists")

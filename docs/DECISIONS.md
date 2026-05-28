@@ -1,62 +1,85 @@
-# Decisions — Breathe ESG Prototype
+# DECISIONS
 
-## SAP Format: Pipe-Delimited Flat File
+Every ambiguity I resolved, why, and what I'd ask the PM.
 
-**What I researched**: SAP exposes data via IDoc (EDI format), OData v4 (REST), BAPIs (function calls), and flat-file exports from transactions like FAGLL03 (GL line items) and MB52 (warehouse stock).
+---
 
-**What I chose**: Pipe-delimited flat file from FAGLL03/MB52. Justification:
-- This is what sustainability teams actually get. SAP system admins export this to email/SharePoint because OData requires an integration project. BAPIs require developer access. IDocs are for system-to-system EDI flows.
-- The format is messy in a realistic way: German headers in some SAP configs, dates in DD.MM.YYYY, unit codes like "L", "M3", "KG" that need mapping.
-- Handling it doesn't require SAP API credentials or a middleware layer.
+## SAP: Which export format?
 
-**What I ignored**: IDoc parsing (requires EDI middleware), OData (requires SAP Fiori/BTP setup per client), HR and asset line items (not relevant to carbon), cost element splits (too complex for prototype).
+**Chose:** SAP flat-file CSV/pipe-delimited, as produced by transactions FAGLL03 (GL line items) or MB52 (warehouse stock).
 
-**What I'd ask the PM**: "Does the client have a dedicated SAP Basis team who could set up an OData service, or are they on a legacy ECC system where flat-file export is the only realistic option? Also — are their fuel purchases captured in Materials Management (MB52) or as GL postings (FAGLL03)? The column structure differs."
+**Why not IDoc:** IDocs are XML/EDI structured messages designed for system-to-system integration. They're the right format for a real-time integration but require SAP BASIS access to configure an IDoc port and a receiver system. No enterprise client's sustainability team has access to that — they have access to a SAP GUI and a "Download" button.
 
-## Utility Format: CSV Portal Export
+**Why not OData/BAPI:** OData requires the SAP Gateway component to be enabled and a dedicated service activated. BAPIs require RFC connectivity and credentials that IT won't hand out for a carbon tool. Both are right for production; both are too much friction for onboarding.
 
-**What I researched**: Utilities provide data via Green Button (ESPI XML, common in US), EDI 867 (meter data), PDF invoices, and web portal CSV exports.
+**Why not XLSX:** SAP can export to Excel but the column structure varies wildly by transaction. CSV/pipe-delimited from FAGLL03 is more stable because it's the finance team's standard FI export — we can rely on Buchungsdatum, Werk, Material, Menge, Mengeneinheit being present.
 
-**What I chose**: CSV portal export. Justification:
-- Green Button is US-specific and rare in UK/EU. Most enterprise clients in the UK use British Gas, EDF, or Centrica portals that offer a "Download billing history" CSV button.
-- PDF parsing requires OCR which adds significant complexity and error surface for a prototype.
-- CSV lets me show realistic challenges: billing periods that cross month boundaries, mixed kWh/MWh units across meters, the UNUSUAL_HIGH flag for values that look like unit errors.
+**Subset handled:** Fuel and direct procurement materials only. We ignore FI postings for payroll (wage postings), asset acquisitions (APC), and inter-company transfers. The material description regex is the entry point for classification — a real deployment would use a configurable material group → scope mapping table per tenant.
 
-**Billing period alignment**: I store `period_start` and `period_end` explicitly and use `period_start` as `activity_date`. This means a Feb 1–Mar 7 billing period is not arbitrarily split — the analyst can see the exact coverage and flag it for calendar-period allocation if needed.
+**German headers:** Handled via a bidirectional alias map. SAP system language determines whether headers are German or English — we normalise both. The most common German columns are covered; anything unrecognised is passed through as-is.
 
-**What I'd ask the PM**: "Do all their sites use the same utility provider? If they have 20 providers each with a different CSV format, we need a mapping layer per provider. Also, do they have smart meters with half-hourly data, or monthly billing summaries?"
+---
 
-## Travel Format: Navan/Concur JSON
+## Utility: Which ingestion mode?
 
-**What I researched**: Concur Expense exports via their Extracts API (fixed-width or CSV); Navan (formerly TripActions) offers a Reporting API returning JSON; SAP Concur also has a TripIt integration.
+**Chose:** CSV portal export.
 
-**What I chose**: JSON export matching Navan's trips-and-segments structure. Justification:
-- Navan's JSON is cleaner than Concur's fixed-width extract and more representative of how modern travel platforms expose data.
-- The segment-based model (flight + hotel + car within one trip) maps naturally to our category system.
-- JSON handles nested structures without delimiter ambiguity.
+**Why not PDF bills:** PDFs require OCR. Even with Tesseract or a cloud vision API, table extraction from PDF utility bills is fragile — layout varies by supplier, multi-page bills require page stitching, and hand-annotated bills (common in facilities teams) fail silently. OCR adds a dependency and a failure mode we'd spend half the project debugging.
 
-**Flight distance calculation**: Airport codes are given but distances often aren't. I built a lookup table for the ~20 most common business routes and a fallback estimator (same first letter = short-haul 800km, different = 5000km). This is flagged as `AIRPORT_DIST_ESTIMATED`. Real deployment would use a full IATA airport lat/lon database with haversine calculation.
+**Why not Green Button (ESPI XML):** Green Button is a US standard. UK and EU utilities don't offer it. For a UK-first client this would exclude most data sources.
 
-**What I'd ask the PM**: "Is the client on Navan or Concur specifically? If Concur, their extract format is very different — fixed-width, not JSON. Also, do they want employee-level data or just aggregate by cost centre?"
+**Why not direct API:** Most UK utilities (British Gas, EDF, Scottish Power) don't offer a standard API for SME customers. Large enterprise accounts sometimes get EDI feeds but that's a six-month procurement process. The facilities manager downloads CSV from a portal.
 
-## Emission Factor Source
+**Billing period handling:** Utility billing periods are 28–35 days and don't align with calendar months. We store `period_start` and `period_end` explicitly and use `period_start` as `activity_date`. This means month-aggregation queries must use period overlap logic, not a simple date equality. I've left that for the analyst's BI tool rather than building it into the prototype.
 
-Used DEFRA 2023 GHG Conversion Factors (simplified subset). These are publicly available and widely accepted for UK-based reporting. In production, factors should be stored in a versioned DB table keyed by (category, country, year) so historical records can be recomputed if factors are updated.
+---
 
-## Authentication: JWT, not session
+## Travel: Which format?
 
-Chose JWT so the React SPA can talk to the Django API without cookie-based auth complexity. Access tokens expire in 8 hours; refresh tokens in 7 days. In production, refresh tokens should be stored in httpOnly cookies rather than localStorage.
+**Chose:** Navan (formerly TripActions) JSON export. Concur's export is structurally identical.
 
-## Deployment: SQLite for prototype, structured for Postgres
+**Why JSON over CSV:** Navan's API and reporting exports are JSON. Corporate travel data is naturally hierarchical — a trip has multiple segments of different types. A flat CSV either loses the trip grouping or duplicates trip-level fields on every row. JSON preserves the structure.
 
-SQLite works for a demo with low concurrency. The schema has no SQLite-specific features — switching to Postgres is a one-line settings change. In production, Postgres is required for concurrent writes and for row-level security.
+**Flight distance calculation:** Navan sometimes provides `distance_km` but often doesn't. We maintain a hardcoded lookup table of 20 common route pairs. For unknown routes we use a heuristic (same first IATA letter = same continent = 800km estimate, otherwise 5000km). This is flagged as `AIRPORT_DIST_ESTIMATED` with `warning` severity so analysts see it. A real deployment would use the OpenFlights or OurAirports dataset (public domain) with haversine calculation.
 
-## Ambiguities I resolved
+**Hotel emission factor:** We use DEFRA's average hotel night factor (31.7 kg CO₂e/night) with no location or star-rating adjustment. Hotel emission intensity varies 3x between budget and luxury properties in different countries. This is a known limitation flagged in SOURCES.md.
 
-| Ambiguity | Decision | Rationale |
-|-----------|----------|-----------|
-| What to do with zero/negative quantities in SAP | Flag with REVERSAL warning, store with absolute value | SAP reversals (credit memos) appear as negatives; they represent real activity |
-| Missing plant code | Store raw code, warn, don't fail | Better to import with a warning than to drop the row silently |
-| Billing period crossing reporting period boundary | Store period_start/end, don't split | Splitting requires allocation logic that analysts should decide |
-| Hotel nights when not provided in travel data | Default to 1 with INFO flag | Better than dropping the segment |
-| Unknown airport pair distance | Estimate with WARNING flag | A flagged estimate is more useful than a null value |
+**Short vs long haul threshold:** 1,500km following DEFRA's own definition. Below 1,500km = short haul EF (0.2553 kg/km), above = long haul (0.1951 kg/km). The crossover is counterintuitive (short haul is higher per km) because of the radiative forcing index and the disproportionate impact of takeoff fuel burn on short routes.
+
+---
+
+## Authentication
+
+**Chose:** JWT via djangorestframework-simplejwt, 8-hour access tokens with 7-day refresh.
+
+**Why not session auth:** The frontend is a separate SPA. Session auth requires cookies and CSRF tokens, which adds complexity to the Axios interceptor. JWT is stateless and works cleanly across origins during development.
+
+**Why not OAuth/SSO:** Scope. The assignment asks for a prototype. SSO (Okta, Azure AD) is the right answer for enterprise deployment but adds two days of integration work. A note in TRADEOFFS.md.
+
+---
+
+## Multi-tenancy isolation
+
+**Chose:** Tenant FK on every model, filtered in every queryset.
+
+**What I'd ask the PM:** "Do we need row-level security at the DB layer, or is application-layer filtering acceptable?" For a SOC2-bound product, Postgres RLS is the right answer. For a prototype, application filtering is fine — but it means a bug in a view could potentially leak cross-tenant data. I've accepted this tradeoff.
+
+---
+
+## Emission factors
+
+**Chose:** Hardcoded DEFRA 2023 GHG Conversion Factors, stored in the parsers module.
+
+**What I'd change:** A real deployment needs a `EmissionFactor` table with version, effective date, scope, category, unit, and factor value. This allows: historical re-computation when factors are updated, client-specific factors (e.g. market-based electricity factors for a client with a PPA), and traceability to the published source. The current approach bakes the factor into the parser — changing it requires a code deploy, not a data update.
+
+**What I'd ask the PM:** "Do clients need market-based Scope 2 accounting, or is location-based sufficient?" Market-based requires the client to provide their supplier-specific emission factor or EAC certificates. Location-based (grid average) is what we do now. This is a material difference for clients with renewable PPAs.
+
+---
+
+## Deployment
+
+**Chose:** Railway for backend (Python/Django), Netlify for frontend (React static).
+
+Railway supports SQLite for prototypes (persistent volume), has a one-command deploy from GitHub, and free tier covers the demo. Netlify handles the React build with zero config.
+
+**What I'd change for production:** Postgres on Railway or Supabase (replace SQLite), Redis for task queue (Celery for async parsing of large files), S3 for file storage, and proper secrets management.

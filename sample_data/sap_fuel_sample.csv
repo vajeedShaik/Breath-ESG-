@@ -1,0 +1,13 @@
+Buchungsdatum|Belegdatum|Werk|Werksbezeichnung|Material|Materialbezeichnung|Menge|Mengeneinheit|Belegart|Kostenstelle|Text
+01.03.2024|28.02.2024|1000|Acme London HQ|DIESEL001|Diesel Kraftstoff|5000.000|L|WA|COST-001|Monatliche Betankung Fuhrpark
+08.03.2024|07.03.2024|2000|Acme Manchester Plant|DIESEL001|Diesel Kraftstoff|8200.000|L|WA|COST-002|Fleet diesel March
+15.03.2024|14.03.2024|2000|Acme Manchester Plant|NATGAS01|Erdgas (Natural Gas)|12000.000|M3|WA|COST-002|Gasverbrauch Heizsystem
+18.03.2024|18.03.2024|3000|Acme Frankfurt Hub|PETROL01|Benzin Regular 95|3200.000|L|WA|COST-003|Benzin Fahrzeugflotte
+20.03.2024|20.03.2024|1000|Acme London HQ|LPG-001|Liquefied Petroleum Gas|450.000|L|WA|COST-001|Forklift LPG top-up
+22.03.2024|22.03.2024|XXXX||DIESEL001|Diesel Kraftstoff|800.000|L|WA|COST-004|Depot Nuffield - plant code not yet registered
+25.03.2024|25.03.2024|DE01|Acme Berlin Office|NATGAS01|Erdgas|3500.000|M3|WA|COST-005|Heizung Q1
+28.03.2024|28.03.2024|US10|Acme New York Office|DIESEL001|Diesel (US Gallons)|1200.000|GAL|WA|COST-006|Generator diesel
+31.03.2024|31.03.2024|1000|Acme London HQ|DIESEL001|Diesel Kraftstoff|-200.000|L|WA|COST-001|Reversal: Duplicate entry March 8
+31.03.2024|31.03.2024|IN01|Acme Mumbai Office|DIESEL001|High Speed Diesel|6800.000|L|WA|COST-007|Generator & fleet HSD
+01.03.2024|01.03.2024|2000|Acme Manchester Plant|PROC-STEEL|Cold Rolled Steel Coil|15000.000|KG|WE|COST-002|Procurement - structural steel
+05.03.2024|05.03.2024|1000|Acme London HQ|PROC-PACK|Packaging Materials|2500.000|KG|WE|COST-001|Packaging Q1 order

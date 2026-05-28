@@ -1,24 +1,31 @@
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
+*.pyd
+.Python
 venv/
+env/
 .env
-db.sqlite3
+
+# Django
 *.sqlite3
 staticfiles/
 media/
+db.sqlite3
 
 # Node
 node_modules/
 dist/
 .env.local
+.env.production.local
 
 # IDE
 .vscode/
 .idea/
 *.swp
-
-# OS
+*.swo
 .DS_Store
-Thumbs.db
+
+# Build artifacts (we commit frontend_dist so Railway doesn't need Node)
+# frontend/dist is NOT ignored — it's committed to the repo

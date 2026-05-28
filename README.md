@@ -1,73 +1,230 @@
-# Breathe ESG — Data Ingestion Prototype
+# Breathe ESG – Emissions Data Ingestion Platform
 
-A Django REST + React app that ingests emissions data from three source types (SAP fuel/procurement, utility electricity, corporate travel), normalises it, and surfaces a review dashboard for analyst sign-off before audit lock.
+This project is a prototype ESG data ingestion platform built using Django and React. The goal of the system is to help sustainability analysts upload, review, normalise, and approve emissions-related data before it is shared with auditors or reporting teams.
 
-## Live Demo
+The platform supports three enterprise data sources:
 
-- **App**: [deployed URL]
-- **Login**: `analyst` / `demo1234`
+* SAP fuel and procurement exports
+* Utility electricity reports
+* Corporate travel records
 
-## Architecture
+The system processes uploaded files, converts the values into standardised emissions records, flags suspicious entries, and stores a complete audit trail of all analyst actions.
 
+---
+
+# Tech Stack
+
+## Backend
+
+* Django
+* Django REST Framework
+* SQLite (development database)
+* JWT Authentication
+
+## Frontend
+
+* React
+* Vite
+* Axios
+* Recharts
+
+---
+
+# Project Structure
+
+```text
+breathe-esg/
+│
+├── backend/
+│   ├── breathe_esg/
+│   ├── ingestion/
+│   ├── accounts/
+│   ├── manage.py
+│   └── seed_data.py
+│
+├── frontend/
+│   └── src/
+│       ├── pages/
+│       ├── components/
+│       └── hooks/
+│
+├── sample_data/
+│
+└── docs/
 ```
-SAP flat file ──┐
-Utility CSV ────┼──> Django REST API ──> SQLite/Postgres ──> React Dashboard
-Travel JSON ────┘         │                                        │
-                    Parsers (3)                              Upload / Review
-                    Unit normalise                           Batch history
-                    Flag anomalies                           Audit log
-                    CO2e compute                             CSV export
-```
 
-## Running Locally
+---
 
-**Backend:**
+# Features Implemented
+
+## 1. Authentication System
+
+The platform includes login authentication using JWT tokens. Demo users are created through the seed script.
+
+Example credentials:
+
+* analyst / demo1234
+* admin / demo1234
+
+---
+
+## 2. File Upload and Parsing
+
+Users can upload files from different enterprise systems. Each source type has its own parser.
+
+Supported formats include:
+
+* CSV files
+* JSON exports
+
+The parser extracts:
+
+* activity date
+* quantity
+* units
+* emission values
+* source category
+* scope classification
+
+---
+
+## 3. Data Normalisation
+
+Raw uploaded values are preserved while additional normalised fields are generated for consistent reporting.
+
+Examples:
+
+* gallons → litres
+* MWh → kWh
+
+This makes the data easier to compare and aggregate later.
+
+---
+
+# 4. Review Workflow
+
+Uploaded records appear in a review queue where analysts can:
+
+* approve records
+* reject records
+* edit incorrect values
+* add review notes
+
+Records can also be flagged automatically if suspicious values are detected.
+
+Examples:
+
+* unusually high electricity usage
+* unknown plant codes
+* missing travel origin data
+
+---
+
+# 5. Dashboard
+
+The dashboard displays summary statistics including:
+
+* total emissions
+* records imported
+* emissions by scope
+* chart visualisations
+
+Charts are implemented using Recharts.
+
+---
+
+# 6. Audit Logging
+
+Every important action is recorded in an audit log, including:
+
+* approvals
+* edits
+* rejections
+* batch locking
+
+This helps maintain traceability for compliance and auditing purposes.
+
+
+
+# Running the Project
+
+## Backend
+
 ```bash
 cd backend
+python -m venv venv
+venv\Scripts\activate
 pip install -r requirements.txt
 python manage.py migrate
 python seed_data.py
 python manage.py runserver
 ```
 
-**Frontend:**
+Backend runs on:
+
+```text
+http://localhost:8000
+```
+
+---
+
+## Frontend
+
 ```bash
 cd frontend
 npm install
-VITE_API_URL=http://localhost:8000/api npm run dev
+npm run dev
 ```
 
-## Documentation
+Frontend runs on:
 
-- [`MODEL.md`](docs/MODEL.md) — Data model, multi-tenancy, audit trail design
-- [`DECISIONS.md`](docs/DECISIONS.md) — Every ambiguity resolved, with rationale
-- [`TRADEOFFS.md`](docs/TRADEOFFS.md) — Three things deliberately not built
-- [`SOURCES.md`](docs/SOURCES.md) — Real-world format research per source
-
-## Sample Data for Demo
-
-After seeding, use the Upload page with these sources:
-
-**SAP (pipe-delimited):**
-```
-Buchungsdatum|Werk|Material|Materialbezeichnung|Menge|Mengeneinheit
-01.03.2024|1000|DIESEL001|Diesel Kraftstoff|5000|L
-15.03.2024|2000|NATGAS01|Erdgas Heizung|12000|M3
-22.03.2024|DE01|PETROL01|Benzin Fahrzeuge|800|L
-28.03.2024|XXXX|LPG001|Fluessiggas|1200|L
+```text
+http://localhost:5173
 ```
 
-**Utility (CSV):**
-```
-Meter ID,Site,Period Start,Period End,Consumption,Unit
-MTR-001,London HQ,2024-02-01,2024-02-29,48500,kWh
-MTR-002,Manchester Plant,2024-02-01,2024-02-29,125000,kWh
-```
+---
 
-**Travel (JSON):**
-```json
-{"trips":[{"traveller_name":"Alice Smith","segments":[
-  {"type":"flight","origin":"LHR","destination":"JFK","departure_date":"2024-03-10","passengers":1},
-  {"type":"hotel","hotel_name":"Marriott Times Square","city":"New York","check_in":"2024-03-10","nights":3}
-]}]}
-```
+# Sample Data
+
+The project includes sample files for testing different ingestion flows:
+
+* SAP fuel sample
+* Utility electricity sample
+* Corporate travel sample
+
+These files contain realistic edge cases such as:
+
+* missing values
+* unit conversion issues
+* unknown plant identifiers
+* long-haul and short-haul travel records
+
+---
+
+# Design Decisions
+
+Some important implementation decisions made during development:
+
+* Raw uploaded values are preserved instead of overwritten
+* Flags are stored in structured JSON format
+* Audit records are append-only
+* Parsing logic is separated from database operations
+* Batch approval is handled independently from record status
+
+---
+
+# Future Improvements
+
+Some features that can be added later:
+
+* automated emission factor updates
+* role-based permissions
+* inline bulk editing
+* advanced analytics dashboards
+* export to external ESG reporting systems
+
+---
+
+# Conclusion
+
+This project demonstrates a complete full-stack workflow for ESG emissions data ingestion and review. The system focuses on usability, auditability, and realistic enterprise data handling while keeping the architecture modular and easy to extend.

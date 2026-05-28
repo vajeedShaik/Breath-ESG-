@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+// In production, Django serves the React build, so API is same origin.
+// In dev, Vite proxies /api → localhost:8000.
+const BASE = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({ baseURL: BASE });
 
@@ -15,7 +17,8 @@ api.interceptors.response.use(
   async err => {
     if (err.response?.status === 401) {
       const refresh = localStorage.getItem('refresh');
-      if (refresh) {
+      if (refresh && !err.config._retry) {
+        err.config._retry = true;
         try {
           const { data } = await axios.post(`${BASE}/auth/token/refresh/`, { refresh });
           localStorage.setItem('access', data.access);
@@ -26,6 +29,7 @@ api.interceptors.response.use(
           window.location.href = '/login';
         }
       } else {
+        localStorage.clear();
         window.location.href = '/login';
       }
     }
