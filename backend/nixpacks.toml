@@ -1,1 +1,8 @@
+[phases.install] 
+cmds = ["pip3 install -r requirements.txt"] 
  
+[phases.build] 
+cmds = ["python3 manage.py collectstatic --noinput", "python3 manage.py migrate", "python3 seed_data.py"] 
+ 
+[start] 
+cmd = "gunicorn breathe_esg.wsgi --workers 2 --bind 0.0.0.0:$PORT --timeout 60" 
