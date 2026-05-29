@@ -1,0 +1,219 @@
+{
+  "export_date": "2024-04-01",
+  "period": "2024-03-01 to 2024-03-31",
+  "organisation": "Acme Manufacturing Ltd",
+  "trips": [
+    {
+      "trip_id": "NVN-2024-001",
+      "traveller_name": "Alice Smith",
+      "employee_id": "EMP-1042",
+      "cost_centre": "CC-ENG-001",
+      "department": "Engineering",
+      "start_date": "2024-03-10",
+      "segments": [
+        {
+          "type": "flight",
+          "origin": "LHR",
+          "destination": "JFK",
+          "departure_date": "2024-03-10",
+          "passengers": 1,
+          "cabin_class": "economy",
+          "carrier": "BA",
+          "flight_number": "BA177",
+          "booking_ref": "ABC123"
+        },
+        {
+          "type": "hotel",
+          "hotel_name": "Marriott Times Square",
+          "city": "New York",
+          "country": "US",
+          "check_in": "2024-03-10",
+          "nights": 3,
+          "rate_usd": 320
+        },
+        {
+          "type": "car",
+          "destination": "JFK Airport",
+          "distance": 28,
+          "distance_unit": "miles",
+          "date": "2024-03-13",
+          "provider": "Uber"
+        },
+        {
+          "type": "flight",
+          "origin": "JFK",
+          "destination": "LHR",
+          "departure_date": "2024-03-13",
+          "passengers": 1,
+          "cabin_class": "economy",
+          "carrier": "VS",
+          "flight_number": "VS46"
+        }
+      ]
+    },
+    {
+      "trip_id": "NVN-2024-002",
+      "traveller_name": "Bob Patel",
+      "employee_id": "EMP-2015",
+      "cost_centre": "CC-FIN-002",
+      "department": "Finance",
+      "start_date": "2024-03-15",
+      "segments": [
+        {
+          "type": "flight",
+          "origin": "LHR",
+          "destination": "CDG",
+          "departure_date": "2024-03-15",
+          "passengers": 1,
+          "cabin_class": "economy",
+          "carrier": "AF"
+        },
+        {
+          "type": "hotel",
+          "hotel_name": "Novotel Paris Centre Tour Eiffel",
+          "city": "Paris",
+          "country": "FR",
+          "check_in": "2024-03-15",
+          "nights": 1,
+          "rate_eur": 180
+        },
+        {
+          "type": "rail",
+          "destination": "Paris CDG Airport",
+          "distance": 35,
+          "distance_unit": "km",
+          "date": "2024-03-16",
+          "provider": "RER B"
+        },
+        {
+          "type": "flight",
+          "origin": "CDG",
+          "destination": "LHR",
+          "departure_date": "2024-03-16",
+          "passengers": 1,
+          "cabin_class": "economy",
+          "carrier": "EZ"
+        }
+      ]
+    },
+    {
+      "trip_id": "NVN-2024-003",
+      "traveller_name": "Carol Zhang",
+      "employee_id": "EMP-3088",
+      "cost_centre": "CC-SLS-003",
+      "department": "Sales",
+      "start_date": "2024-03-20",
+      "segments": [
+        {
+          "type": "flight",
+          "origin": "LHR",
+          "destination": "BOM",
+          "departure_date": "2024-03-20",
+          "passengers": 1,
+          "cabin_class": "economy",
+          "carrier": "AI"
+        },
+        {
+          "type": "hotel",
+          "hotel_name": "Taj Mahal Palace",
+          "city": "Mumbai",
+          "country": "IN",
+          "check_in": "2024-03-20",
+          "nights": 2
+        },
+        {
+          "type": "flight",
+          "origin": "BOM",
+          "destination": "SIN",
+          "departure_date": "2024-03-22",
+          "passengers": 1,
+          "cabin_class": "economy",
+          "carrier": "SQ"
+        },
+        {
+          "type": "hotel",
+          "hotel_name": "Marina Bay Sands",
+          "city": "Singapore",
+          "country": "SG",
+          "check_in": "2024-03-22",
+          "nights": 2
+        },
+        {
+          "type": "car",
+          "destination": "Singapore CBD",
+          "distance": 45,
+          "distance_unit": "km",
+          "date": "2024-03-23",
+          "provider": "Grab"
+        },
+        {
+          "type": "flight",
+          "origin": "SIN",
+          "destination": "LHR",
+          "departure_date": "2024-03-24",
+          "passengers": 1,
+          "cabin_class": "economy",
+          "carrier": "SQ"
+        }
+      ]
+    },
+    {
+      "trip_id": "NVN-2024-004",
+      "traveller_name": "Dave Wilson",
+      "employee_id": "EMP-0901",
+      "cost_centre": "CC-OPS-004",
+      "department": "Operations",
+      "start_date": "2024-03-25",
+      "segments": [
+        {
+          "type": "rail",
+          "destination": "Manchester Piccadilly",
+          "distance": 300,
+          "distance_unit": "km",
+          "date": "2024-03-25",
+          "provider": "Avanti West Coast"
+        },
+        {
+          "type": "flight",
+          "origin": "",
+          "destination": "EDI",
+          "departure_date": "2024-03-26",
+          "passengers": 1
+        }
+      ]
+    },
+    {
+      "trip_id": "NVN-2024-005",
+      "traveller_name": "Eve Okonkwo",
+      "employee_id": "EMP-4210",
+      "cost_centre": "CC-HR-005",
+      "department": "Human Resources",
+      "start_date": "2024-03-08",
+      "segments": [
+        {
+          "type": "flight",
+          "origin": "LHR",
+          "destination": "FRA",
+          "departure_date": "2024-03-08",
+          "passengers": 1,
+          "cabin_class": "economy"
+        },
+        {
+          "type": "hotel",
+          "hotel_name": "Hilton Frankfurt Airport",
+          "city": "Frankfurt",
+          "country": "DE",
+          "check_in": "2024-03-08",
+          "nights": 2
+        },
+        {
+          "type": "flight",
+          "origin": "FRA",
+          "destination": "LHR",
+          "departure_date": "2024-03-10",
+          "passengers": 1
+        }
+      ]
+    }
+  ]
+}

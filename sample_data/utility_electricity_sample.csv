@@ -1,0 +1,12 @@
+Meter ID,Site,Period Start,Period End,Consumption,Unit,Tariff,Cost,Currency
+MTR-001,London HQ - Main Building,2024-02-01,2024-02-29,48500,kWh,TOU-Peak,5820.00,GBP
+MTR-001,London HQ - Main Building,2024-03-01,2024-03-31,51200,kWh,TOU-Peak,6144.00,GBP
+MTR-002,London HQ - Data Centre,2024-02-01,2024-02-29,32100,kWh,Flat,3852.00,GBP
+MTR-002,London HQ - Data Centre,2024-03-01,2024-03-31,33800,kWh,Flat,4056.00,GBP
+MTR-003,Manchester Plant - Production Hall A,2024-01-28,2024-02-26,124.5,MWh,Industrial,14940.00,GBP
+MTR-003,Manchester Plant - Production Hall A,2024-02-27,2024-03-27,118.2,MWh,Industrial,14184.00,GBP
+MTR-004,Manchester Plant - Production Hall B,2024-01-28,2024-02-26,87.3,MWh,Industrial,10476.00,GBP
+MTR-005,Frankfurt Warehouse,2024-02-01,2024-02-29,1250000,kWh,Industrial-DE,87500.00,EUR
+MTR-006,Berlin Office,2024-02-01,2024-02-29,8400,kWh,Office-DE,1176.00,EUR
+MTR-007,Mumbai Office,2024-02-01,2024-02-29,14200,kWh,Commercial-IN,994.00,INR
+MTR-008,New York Office,2024-02-01,2024-02-29,22800,kWh,Commercial-US,2736.00,USD

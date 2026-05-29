@@ -101,4 +101,21 @@ CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 import os
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'frontend_build', 'assets')]
+
+# Serve React frontend
+import os
+FRONTEND_DIR = BASE_DIR / 'frontend_dist'
+TEMPLATES[0]['DIRS'] = [FRONTEND_DIR]
+
+# Include the React build's assets folder in staticfiles
+
+STATICFILES_DIRS = [FRONTEND_DIR / "assets"] if (FRONTEND_DIR / "assets").exists() else []
+
+# Production security settings (activated when DEBUG=False)
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True

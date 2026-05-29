@@ -1,72 +1,102 @@
-# Data Model — Breathe ESG Prototype
+# DATA MODEL
 
 ## Overview
 
-The core design question: where does the "source of truth" live, and how do you trace any approved CO2e figure back to the exact byte in the original file?
+The data model has five core tables. Every data row is scoped to a **Tenant** — this is the unit of multi-tenancy. A `TenantMembership` links Django users to tenants with roles (analyst, admin, auditor). All queries filter by tenant first.
 
-This model answers that with three layers:
-1. **IngestionBatch** — provenance record per file import
-2. **EmissionRecord** — one normalised row per activity event
-3. **AuditEvent** — append-only action log
+---
 
-## Multi-tenancy
+## Tables
 
-Every data table carries a `tenant` FK. All queries filter by the authenticated user's `TenantMembership`. No shared data between tenants.
+### Tenant
+The enterprise client. All other tables FK to this.
+- `id` UUID PK
+- `name` string
+- `slug` unique slug (for future subdomain routing)
 
-I chose **row-level tenancy over schema-per-tenant** for the prototype:
-- Simpler to deploy (single DB, single migration set)
-- Django ORM handles filtering naturally
+### TenantMembership
+Links a user to a tenant. One user can belong to multiple tenants (future), but the current prototype routes to the first membership.
+- `user` FK → Django User
+- `tenant` FK → Tenant
+- `role` enum: analyst | admin | auditor
 
-Downside: a miscoded query could leak cross-tenant data. Mitigation: every view resolves tenant from the authenticated user, not from a forgeable request parameter. In production: a custom manager that auto-applies tenant scoping.
+### IngestionBatch
+One batch = one import run (one file upload or API pull). This is the **source-of-truth** record.
+- `id` UUID PK
+- `tenant` FK
+- `uploaded_by` FK → User (nullable, SET_NULL on delete)
+- `source_type` enum: sap_fuel | utility | travel
+- `original_filename` — preserved exactly as received
+- `file_content` TextField — raw bytes stored for re-parse if emission factors change
+- `status` enum: pending → parsing → review → approved | failed
+- `parser_version` — so we know which parser logic produced the records
+- `row_count`, `error_count`, `warning_count` — summary stats
+- `error_detail` — batch-level parse failure message
+- `created_at`, `parsed_at`
 
-## Scope 1 / 2 / 3
+**Why store raw file content?** Emission factors change. DEFRA publishes new GHG conversion factors annually. If we need to re-derive CO₂e from the original activity data without asking the client to re-upload, we can re-run the parser against `file_content`.
 
-| Scope | Definition | Sources |
-|-------|-----------|---------|
-| 1 | Direct combustion | SAP fuel: diesel, petrol, natural gas, LPG |
-| 2 | Purchased electricity | Utility portal CSV |
-| 3 | Value chain | Corporate travel; SAP procurement fallback |
+### EmissionRecord
+One normalised activity row. The core entity.
 
-Scope is a stored field on EmissionRecord, not derived at query time. If classification logic changes, old records keep their original scope unless explicitly re-parsed. This is intentional — it prevents silent re-classification of historical approved data.
+**Scope assignment** (hardcoded by source type + material category):
+- Scope 1: SAP fuel combustion records (diesel, petrol, natural gas, LPG)
+- Scope 2: Utility electricity consumption
+- Scope 3: Corporate travel (flights, hotels, ground transport) and SAP procurement
 
-## Unit Normalisation
+**Quantity fields — two tiers:**
 
-Raw values are preserved exactly (`raw_quantity`, `raw_unit`). Normalised values stored separately (`quantity_normalised`, `normalised_unit`, `conversion_factor`).
+| Field | Purpose |
+|---|---|
+| `raw_quantity` + `raw_unit` | Exactly as received — never modified |
+| `quantity_normalised` + `normalised_unit` | After unit conversion (kWh, litres, km, nights) |
+| `conversion_factor` | The multiplier used, so the normalisation is auditable |
 
-Normalised units:
-- Fuel volume: litres (diesel, petrol, LPG)
-- Natural gas: kWh (via 10.55 kWh/m3 HHCV)
-- Electricity: kWh
-- Travel: km (per-passenger for flights), nights (hotels)
+**Why keep raw?** The original value + unit is the audit evidence. An auditor needs to trace from the CO₂e figure back to the source document. If we only store the normalised value, that chain is broken.
 
-Note: natural gas must be checked before volume units in the normalisation function — m3 appears in both VOLUME_TO_LITRES (as 1000 L) and GAS_TO_M3 (for kWh conversion). Without explicit ordering, gas would be incorrectly stored as litres.
+**Emissions:**
+- `co2e_kg` — computed at ingest using static DEFRA 2023 factors; nullable (some procurement rows have no factor)
+- `emission_factor_used` — string describing the factor source and version
 
-## Source-of-Truth Tracking
+**Review lifecycle:**
+- `status`: pending → approved | rejected | edited
+- `reviewed_by`, `reviewed_at` — who approved/rejected and when
+- `analyst_note` — free-text comment for auditor
+- `is_locked` — set True after batch-level approval; prevents further edits
 
-IngestionBatch records: filename, uploader, parse time, parser version, row/error/warning counts, and the full raw file content. This allows re-parsing against updated parsers or emission factors without needing the original file re-uploaded.
+**Source traceability:**
+- `batch` FK — which import produced this row
+- `source_row_id` — original row identifier in source file (e.g. `row_42`)
+- `flags` JSONField — structured list of `{code, message, severity}` objects
 
-Each EmissionRecord carries `source_row_id` (position in original file) and `batch` FK, so any approved figure can be traced back to its origin.
+**Flag severities:**
+- `error` — data is probably wrong or missing (missing date, unknown unit)
+- `warning` — data is usable but needs analyst attention (estimated airport distance, unknown plant code)
+- `info` — normalisation note (natural gas converted via 10.55 kWh/m³)
 
-## Audit Trail
+### AuditEvent
+Append-only audit trail. Never updated or deleted.
+- `id` UUID PK
+- `tenant`, `actor` FK
+- `event_type` enum (batch_uploaded, batch_parsed, record_approved, record_edited, etc.)
+- `batch`, `record` nullable FKs — link the event to the object it describes
+- `detail` JSONField — before/after values for edits, error messages, row counts
 
-AuditEvent is append-only. Edit events store full before/after serialisation in `detail` JSON, enabling field-level diff reconstruction. Records are never updated or deleted from this table.
+### PlantLookup
+SAP plant codes (e.g. `1000`, `DE01`) mapped to human-readable names and countries. Missing lookups produce a `UNKNOWN_PLANT` warning flag, not an error — we preserve the raw code.
 
-## Quality Flags
+---
 
-Each EmissionRecord has a `flags` JSON array with structured entries:
-```json
-{"code": "UNKNOWN_PLANT", "message": "...", "severity": "warning"}
-```
+## Design decisions
 
-Flags persist even after analyst approval. This was deliberate: removing flags on approval would hide the fact that the data had an issue from the auditor. The analyst's approval note explains why they accepted it despite the flag.
+**UUID PKs everywhere** — avoids sequential ID leakage across tenants and is safe to expose in URLs.
 
-## Entity Relationships
+**Multi-tenancy as FK, not schema separation** — simpler to operate for a prototype. Schema-per-tenant (Postgres schemas) is the right call at scale but adds significant migration and connection-pool complexity.
 
-```
-Tenant
-  |-- TenantMembership --> User
-  |-- PlantLookup (SAP plant code -> display name, country)
-  |-- IngestionBatch
-  |     `-- EmissionRecord (many, scoped to batch)
-  `-- AuditEvent (references Batch and/or Record, actor is User)
-```
+**Scope 1/2/3 stored on the record, not computed at query time** — the classification logic lives in the parser and the result is persisted. This means the scope label is stable even if we change the classification rules later (old records keep their original scope). A re-classification would be a new batch, not a migration.
+
+**Flags as JSONField, not a separate table** — flags are generated at parse time and don't change after that (unless the record is re-parsed). A separate `RecordFlag` table would be cleaner for querying but adds a join to every record fetch. Given the read pattern (load all flags for a record in the review UI), JSONField is the right tradeoff at prototype scale.
+
+**`is_locked` as a boolean, not a status** — status tracks the review workflow (pending → approved → edited). `is_locked` tracks whether the record is frozen for audit. They're orthogonal: an approved record can be unlocked for correction (audit event written), while a rejected record is still locked if it was locked before rejection.
+
+**`file_content` as TextField, not FileField** — avoids S3/media storage configuration for the prototype. In production this would be a FileField pointing to S3 with server-side encryption.

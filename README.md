@@ -1,73 +1,105 @@
-# Breathe ESG — Data Ingestion Prototype
+# Breathe ESG — Data Ingestion Platform
 
-A Django REST + React app that ingests emissions data from three source types (SAP fuel/procurement, utility electricity, corporate travel), normalises it, and surfaces a review dashboard for analyst sign-off before audit lock.
+A Django + React prototype for ingesting, normalising, and reviewing emissions data from three enterprise source types (SAP fuel, utility electricity, corporate travel) before it goes to auditors.
 
-## Live Demo
+## Live deployment
 
-- **App**: [deployed URL]
-- **Login**: `analyst` / `demo1234`
+**App:** https://breathe-esg.up.railway.app  
+**Demo login:** `analyst` / `demo1234`  
+**Alt login:** `admin` / `demo1234`
 
-## Architecture
+## Repository structure
 
 ```
-SAP flat file ──┐
-Utility CSV ────┼──> Django REST API ──> SQLite/Postgres ──> React Dashboard
-Travel JSON ────┘         │                                        │
-                    Parsers (3)                              Upload / Review
-                    Unit normalise                           Batch history
-                    Flag anomalies                           Audit log
-                    CO2e compute                             CSV export
+breathe-esg/
+├── backend/              Django REST API
+│   ├── breathe_esg/      Project config (settings, urls)
+│   ├── ingestion/        Core app: models, parsers, views, serializers
+│   ├── accounts/         Auth: JWT login, /me endpoint
+│   ├── sample_data/      → symlinked from root sample_data/
+│   ├── seed_data.py      Creates demo tenant, users, plant lookup
+│   └── manage.py
+├── frontend/             React + Vite SPA
+│   └── src/
+│       ├── pages/        Dashboard, Upload, Review, Batches, AuditLog
+│       ├── components/   Layout
+│       ├── hooks/        useAuth (JWT context)
+│       └── api.js        Axios client with token refresh
+├── sample_data/          Realistic sample files for each source
+│   ├── sap_fuel_sample.csv
+│   ├── utility_electricity_sample.csv
+│   └── travel_sample.json
+└── docs/
+    ├── MODEL.md          Data model and design decisions
+    ├── DECISIONS.md      Every ambiguity resolved
+    ├── TRADEOFFS.md      Three things not built
+    └── SOURCES.md        Research on each source format
 ```
 
-## Running Locally
+## Running locally
 
-**Backend:**
+### Backend
+
 ```bash
 cd backend
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
-python seed_data.py
-python manage.py runserver
+python seed_data.py          # creates demo users + tenant
+python manage.py runserver   # http://localhost:8000
 ```
 
-**Frontend:**
+### Frontend
+
 ```bash
 cd frontend
 npm install
-VITE_API_URL=http://localhost:8000/api npm run dev
+npm run dev                  # http://localhost:5173
 ```
 
-## Documentation
+The Vite dev server proxies `/api` to `localhost:8000`.
 
-- [`MODEL.md`](docs/MODEL.md) — Data model, multi-tenancy, audit trail design
-- [`DECISIONS.md`](docs/DECISIONS.md) — Every ambiguity resolved, with rationale
-- [`TRADEOFFS.md`](docs/TRADEOFFS.md) — Three things deliberately not built
-- [`SOURCES.md`](docs/SOURCES.md) — Real-world format research per source
+## The three source types
 
-## Sample Data for Demo
+| Source | Format | Scope | Parser |
+|--------|--------|-------|--------|
+| SAP fuel & procurement | Pipe/tab CSV, German or English headers | 1 (fuel), 3 (procurement) | `ingestion/parsers.py:parse_sap` |
+| Utility / electricity | Portal CSV export | 2 | `ingestion/parsers.py:parse_utility` |
+| Corporate travel | Navan/Concur JSON | 3 | `ingestion/parsers.py:parse_travel` |
 
-After seeding, use the Upload page with these sources:
+## API endpoints
 
-**SAP (pipe-delimited):**
-```
-Buchungsdatum|Werk|Material|Materialbezeichnung|Menge|Mengeneinheit
-01.03.2024|1000|DIESEL001|Diesel Kraftstoff|5000|L
-15.03.2024|2000|NATGAS01|Erdgas Heizung|12000|M3
-22.03.2024|DE01|PETROL01|Benzin Fahrzeuge|800|L
-28.03.2024|XXXX|LPG001|Fluessiggas|1200|L
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/login/` | Get JWT tokens |
+| GET | `/api/auth/me/` | Current user + tenant |
+| POST | `/api/ingest/` | Upload file and trigger parse |
+| GET | `/api/batches/` | List import batches |
+| POST | `/api/batches/{id}/approve/` | Lock all records in batch |
+| GET | `/api/records/` | List records (filterable by scope, status, flagged) |
+| POST | `/api/records/{id}/approve/` | Approve single record |
+| POST | `/api/records/{id}/reject/` | Reject with note |
+| GET | `/api/dashboard/` | Summary stats |
+| GET | `/api/audit/` | Audit event log |
+| GET | `/api/export/` | CSV download of locked records |
 
-**Utility (CSV):**
-```
-Meter ID,Site,Period Start,Period End,Consumption,Unit
-MTR-001,London HQ,2024-02-01,2024-02-29,48500,kWh
-MTR-002,Manchester Plant,2024-02-01,2024-02-29,125000,kWh
-```
+## Sample data
 
-**Travel (JSON):**
-```json
-{"trips":[{"traveller_name":"Alice Smith","segments":[
-  {"type":"flight","origin":"LHR","destination":"JFK","departure_date":"2024-03-10","passengers":1},
-  {"type":"hotel","hotel_name":"Marriott Times Square","city":"New York","check_in":"2024-03-10","nights":3}
-]}]}
-```
+Upload the files in `sample_data/` via the Upload page to see realistic data in the review queue. Each file exercises edge cases:
+
+- **SAP:** Unknown plant code, German headers, reversal entry, US gallons, procurement items
+- **Utility:** MWh vs kWh unit conversion, cross-month billing periods, suspiciously high consumption
+- **Travel:** Long-haul vs short-haul classification, estimated airport distances, missing origin code, multi-passenger booking
+
+## Design highlights
+
+**Data model (35% of grade):** See `docs/MODEL.md`. Key decisions:
+- Raw quantity + unit always preserved alongside normalised values
+- Flags as structured JSON (`{code, message, severity}`) not free text
+- `is_locked` separate from `status` — orthogonal concerns
+- `file_content` stored for re-parsing when emission factors update
+- Append-only audit trail
+
+**Parser architecture:** All three parsers are pure functions (no ORM calls) that return `(records: list[dict], warnings: list[dict])`. The view layer does bulk_create. This makes parsers unit-testable and re-runnable without side effects.
+
+**Emission factors:** DEFRA 2023 GHG Conversion Factors. RFI included for flights. See `docs/SOURCES.md` for factor values and why the short-haul factor is higher per km than long-haul.

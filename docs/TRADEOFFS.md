@@ -1,31 +1,33 @@
-# Tradeoffs — Three Things I Deliberately Did Not Build
+# TRADEOFFS
 
-## 1. Emission Factor Management UI
+Three things I deliberately did not build, and why.
 
-**What it would be**: A CRUD interface for analysts to maintain emission factors per category, country, and year — so when DEFRA releases updated 2024 factors, they can update them without code changes.
+---
 
-**Why I skipped it**: The prototype uses hardcoded 2023 DEFRA factors. Building a factor management UI correctly requires versioning (historical records need to know which factor was current at the time), effective date logic (factors change annually, mid-year sometimes), and country-level variation. Getting this wrong is worse than not having it — silent factor changes on locked approved records would be an audit disaster.
+## 1. Async task queue (Celery + Redis)
 
-**What I did instead**: Stored `emission_factor_used` as a string on every record ("DEFRA 2023 GHG Conversion Factors (simplified)") so an auditor knows what was applied. Factors are in a single dict in `parsers.py`, easy to find.
+**What it is:** Running file parsing in a background worker instead of synchronously in the HTTP request handler.
 
-**What it would take to build properly**: 2-3 days minimum. DB table `EmissionFactor(category, country, year, value, source, effective_from, effective_to)`. Factor lookup at parse time. Recompute trigger when factors change. UI for managing entries.
+**Why I didn't build it:** It adds significant infrastructure (Redis, Celery worker process, beat scheduler) and deployment complexity. For the prototype's file sizes — a typical SAP export is a few hundred to a few thousand rows — synchronous parsing in Django's request/response cycle is fast enough (under a second). The UX shows a loading state during the POST and redirects on completion.
 
-## 2. Multi-File Format Auto-Detection Per Source
+**Why it matters in production:** An enterprise SAP export for a full year can be 50,000–200,000 rows. Parsing that synchronously would hit Gunicorn's worker timeout (30s default). The right architecture is: (1) upload returns immediately with a batch ID, (2) a Celery task does the parsing, (3) the frontend polls `GET /api/batches/{id}/` until status changes from `parsing` to `review`. The model and batch status enum already support this — `status: parsing` is the placeholder. Adding Celery is a deployment decision, not a model redesign.
 
-**What it would be**: Upload any SAP file — IDoc, flat file, OData snapshot, or custom extract — and have the ingestion layer detect the format and route to the right parser. Same for utility (Green Button XML vs portal CSV vs PDF OCR).
+---
 
-**Why I skipped it**: Auto-detection of binary/semi-structured formats is fragile. IDoc vs CSV vs XML can be distinguished reliably, but distinguishing "our client's SAP export" from "another client's SAP export with different column names" requires per-client configuration that belongs in a mapping layer we don't have yet.
+## 2. Emission factor management UI
 
-**What I did instead**: One format per source type, clearly documented. The upload UI tells the analyst exactly what format is expected. The parser's header aliasing handles the most common German/English header variations.
+**What it is:** A UI for admins to view, update, and version emission factors — without a code deploy.
 
-**What it would take**: A parser registry with format detectors, per-client column mapping config stored in DB, a validation step before committing records, and a UI for operations to configure new client mappings. Scope: 1-2 weeks.
+**Why I didn't build it:** The factors are currently hardcoded in `parsers.py`. Building a factors management UI requires: an `EmissionFactor` DB table with versioning, an admin CRUD interface, logic to re-derive `co2e_kg` on all locked records when a factor is updated, and an audit trail for factor changes. That's a feature in itself.
 
-## 3. Background Job Processing
+**Why it matters in production:** DEFRA publishes new factors every June. A carbon platform that requires a code deploy to update emission factors is operationally broken. Analysts need to be able to apply new factors, see which records used old factors, and trigger a re-computation. The `emission_factor_used` field on `EmissionRecord` is designed to make this traceable — it stores the factor source and version as a string. The model is ready for the feature; I just didn't build the UI.
 
-**What it would be**: File uploads enqueue a Celery task; the HTTP response returns immediately with a batch ID; the frontend polls for completion. Necessary for files with >10K rows, which SAP exports regularly produce.
+---
 
-**Why I skipped it**: Celery requires a message broker (Redis or RabbitMQ), adds infrastructure complexity, and makes local development harder. For the prototype, parsing happens synchronously in the HTTP request. A 5,000-row SAP file parses in under 2 seconds in benchmarks.
+## 3. SSO / enterprise authentication (Okta, Azure AD, Google Workspace)
 
-**The risk**: An enterprise client with a 50K-row quarterly SAP export would hit an HTTP timeout. The current code uses `bulk_create(batch_size=500)` which handles the DB side efficiently, but the parsing loop is synchronous.
+**What it is:** Delegating authentication to the client's identity provider instead of managing usernames and passwords.
 
-**What it would take**: Celery + Redis, a task status polling endpoint (`/api/batches/<id>/status/`), and a frontend polling loop on the upload page. The batch model already has a `status` field designed for this — `pending -> parsing -> review` maps directly to Celery task states. Scope: 1 day of infrastructure setup.
+**Why I didn't build it:** django-allauth with SAML2 or OIDC is a two-day integration requiring a test IdP, redirect URI configuration, and careful session management. The assignment asks for a working prototype in four days.
+
+**Why it matters in production:** No enterprise will give their sustainability team credentials to a third-party app. They will require SSO via their existing IdP (usually Azure AD for large corporates, Okta for tech companies, Google Workspace for SMEs). Without SSO, onboarding is blocked at the IT security review. The JWT auth we have is the right internal mechanism — it just needs to be issued by the IdP's OIDC callback rather than a username/password login. The `TenantMembership` model supports this: the Django user would be created on first SSO login and linked to the tenant.
